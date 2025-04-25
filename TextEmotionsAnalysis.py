@@ -1,470 +1,166 @@
-import nrclex
-from nrclex import NRCLex
-
-import nltk
-#nltk.download()
-
-import numpy as np
-import pandas as pd
 import os
 import sys
-
-from imutils import paths
-import argparse
-import numpy as np
-import os
-import sys
-import cv2
-import shutil
-import re
-
-import matplotlib.pyplot as plt 
-
 import glob
-
-import docx 
-from docx.enum.text import WD_COLOR_INDEX 
-
+import argparse
+import pandas as pd
+import matplotlib.pyplot as plt
+from nrclex import NRCLex
+import docx
+from docx.enum.text import WD_COLOR_INDEX
 from docx.shared import Pt
 from docx.enum.style import WD_STYLE_TYPE
 
+def get_coeff_emotion(emotions_list):
+    coeff = 0
+    emotions = [e[0].lower() for e in emotions_list]
+    emotion_weights = {
+        "fear": -1,
+        "anger": -1,
+        "anticip": 1,
+        "trust": 1,
+        "surprise": 1,
+        "positive": 1,
+        "negative": -1,
+        "sadness": -1,
+        "disgust": -1,
+        "joy": 1
+    }
+    for emotion in emotions:
+        if emotion in emotion_weights:
+            coeff += emotion_weights[emotion]
+    return coeff
 
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--Path", type=str, default=None, help="Path to the folder containing .txt files")
+    parser.add_argument("--QRebuild", type=int, default=0, help="QRebuild option (not used here)")
+    args = parser.parse_args()
 
-#==============================================================================
+    QView = False  # Set to True to enable detailed logging
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--Path",type=str,default="None",help='Path.')
-parser.add_argument("--QRebuild", type=int, default=0,help='QRebuild.')
-args = parser.parse_args()
+    current_directory = os.getcwd()
+    path_dataset = args.Path if args.Path else os.path.join(current_directory, "DATA")
 
+    if QView:
+        print(f"Dataset path = {path_dataset}")
 
-currentDirectory = os.getcwd()
-PathW=os.path.dirname(sys.argv[0])
-QView=False
+    # Retrieve all .txt files from the dataset directory
+    list_files = glob.glob(os.path.join(path_dataset, "*.txt"))
 
-print("CurrentDirectory="+currentDirectory)
-print("PathW="+PathW)
+    # Color mapping for emotions for matplotlib plots
+    color_map_emotion = {
+        "fear": "red",
+        "anger": "darkred",
+        "anticip": "gray",
+        "trust": "turquoise",
+        "surprise": "pink",
+        "positive": "limegreen",
+        "negative": "red",
+        "sadness": "violet",
+        "disgust": "goldenrod",
+        "joy": "yellow"
+    }
 
-PathDataSet=args.Path
-if (PathDataSet=='None'):
-    PathDataSet=currentDirectory+"\DATA"
-    print("Path dataset="+PathDataSet)
+    # Color mapping for emotion scores for Word document highlighting
+    color_map_score = [
+        (lambda s: s <= -4, WD_COLOR_INDEX.DARK_RED),
+        (lambda s: s <= -3, WD_COLOR_INDEX.RED),
+        (lambda s: s <= -1, WD_COLOR_INDEX.VIOLET),
+        (lambda s: s == 0, WD_COLOR_INDEX.WHITE),
+        (lambda s: s >= 4, WD_COLOR_INDEX.BRIGHT_GREEN),
+        (lambda s: s >= 3, WD_COLOR_INDEX.GREEN),
+        (lambda s: s >= 1, WD_COLOR_INDEX.GRAY_25)
+    ]
 
-
-ListFiles=glob.glob(PathDataSet+"/*.txt")
-
-if QView:
-    print(ListFiles)
-
-
-
-def GetCoeffEmotion(ch):
-    coeff=0;
-    Content=str(ch)
-    if (len(ch)>0):
-        if (Content.find("fear")>0):
-            coeff=coeff-1 
-        if (Content.find("anger")>0):
-            coeff=coeff-1 
-        if (Content.find("anticip")>0):
-            coeff=coeff+1 
-        if (Content.find("trust")>0):
-            coeff=coeff+1 
-        if (Content.find("surprise")>0):
-            coeff=coeff+1  
-        if (Content.find("positive")>0):
-           coeff=coeff+1  
-        if (Content.find("negative")>0):
-           coeff=coeff-1   
-        if (Content.find("sadness")>0):
-            coeff=coeff-1  
-        if (Content.find("disgust")>0):
-            coeff=coeff-1    
-        if (Content.find("joy")>0):
-            coeff=coeff+1   
-    return(coeff)
-
-for i in range(0,len(ListFiles)):
-    file1 = open(ListFiles[i])
-    TextToRead=file1.read()
-    file1.close()
-    
-    if (1==1):
+    for file_path in list_files:
         if QView:
-            print("");
-            print("");
-            print(TextToRead)
-            print("");
-            print("");
-        
-        FileName=ListFiles[i][:-4]
-        
-        currentDirectory = os.getcwd()
-        #print(currentDirectory)
-        
-        
-        #Instantiate text object (for best results, 'text' should be unicode).
-        
-        #text_object = NRCLex('text')
-        
-        text_object = NRCLex(TextToRead)
-        
-        
-        #List Sentences
-        #print("NbSentences="+str(len(text_object.sentences)))
-        
-        
-        #FICH1 = open(FileName+"_Repport_Sentences.csv", "w")
-        for i in range(len(text_object.sentences)):
-            Phrase=text_object.sentences[i]
-            Phrase_object = NRCLex(str(Phrase))
-            if QView:
-                print(Phrase)
-                print(Phrase_object.top_emotions)
-                print(GetCoeffEmotion(Phrase_object.top_emotions))
-                print("")
+            print(f"\nProcessing file: {file_path}")
 
-        
-        
-#1   emotion.words 	Return words list.
-#2	emotion.sentences	Return sentences list.
-#3	emotion.affect_list	Return affect list.
-#4	emotion.affect_dict	Return affect dictionary.
-#5	emotion.raw_emotion_scores	Return raw emotional counts.
-#6	emotion.top_emotions	Return highest emotions.
-#7	emotion.affect_frequencies
+        # Read the content of the text file
+        with open(file_path, "r", encoding="utf-8") as f:
+            text_to_read = f.read()
 
-        #print("=Return Top Emotions=================================================================================")
-        #print(text_object.top_emotions)
-        
-        #Return affect dictionary.
-        #print("=Return affect dictionary=================================================================================")
-        Name=tuple(text_object.affect_dict)
-        #Name
-        #text_object.affect_dict[Name[0]]
-        
-        FICH1 = open(FileName+"_Report_Analysis.csv", "w")
-        for i in range(len(Name)):
-            if QView:
-                print(Name[i]+" "+str(text_object.affect_dict[Name[i]]))
-                print("")
-            Sch=Name[i]+","+str(text_object.affect_dict[Name[i]])
-            FICH1.write(Sch)
-            FICH1.write("\n")
-        FICH1.close()
-        
-        #Return affect frequencies.
-        FICH2 = open(FileName+"_Report.csv", "w")
-        FICH2.write("Emotions,Frequencies\n")
         if QView:
-            print("")
-            print("Nb frequencies="+str(len(text_object.affect_frequencies)))
-        Name=tuple(text_object.affect_frequencies)
-        for i in range(len(text_object.affect_frequencies)):
-            if QView:
-                print(Name[i]+" "+str(text_object.affect_frequencies[Name[i]]))
-            Sch=Name[i]+","+str(text_object.affect_frequencies[Name[i]])
-            FICH2.write(Sch)
-            FICH2.write("\n")
-       
+            print("\nRead text:\n", text_to_read, "\n")
+
+        # Perform emotion analysis on the entire text
+        text_object = NRCLex(text_to_read)
+
+        # Get the base filename without extension
+        file_base_name, _ = os.path.splitext(file_path)
+
+        # --- Generate CSV report for raw emotion counts (affect_dict) ---
+        affect_dict = text_object.affect_dict
+        df_affect = pd.DataFrame(list(affect_dict.items()), columns=["Emotion", "Count"])
+        csv_analysis_path = f"{file_base_name}_Report_Analysis.csv"
+        df_affect.to_csv(csv_analysis_path, index=False)
         if QView:
-            print("===========================================================================")
-            print("***************************************************************************")
-        FICH2.close()
-        
-        data = pd.read_csv(FileName+"_Report.csv") 
-        df = pd.DataFrame(data) 
-      
-        X = list(df.iloc[:, 0]) 
-        Y = list(df.iloc[:, 1]) 
-      
-        fig = plt.figure() 
-        max_y_lim = max(Y)+0.01
-        min_y_lim = min(Y)
-        plt.ylim(min_y_lim, max_y_lim)
+            print(f"Saved affect_dict report to {csv_analysis_path}")
 
-        #plt.bar(X, Y, color='g') 
-        bars=plt.bar(X, Y) 
-        bars[0].set_color('red') #Fear
-        bars[1].set_color('red') #Anger
-        bars[2].set_color('gray') #Disgust
-        bars[3].set_color('blue') #Trust
-        bars[4].set_color('pink') #Surprise
-        bars[5].set_color('green') #Positive
-        bars[6].set_color('red') #Negative
-        bars[7].set_color('red') #Sadness
-        bars[8].set_color('red') #Disgust
-        bars[9].set_color('yellow') #Joy
+        # --- Generate CSV report for emotion frequencies (affect_frequencies) ---
+        affect_freq = text_object.affect_frequencies
+        df_freq = pd.DataFrame(list(affect_freq.items()), columns=["Emotion", "Frequency"])
+        csv_freq_path = f"{file_base_name}_Report.csv"
+        df_freq.to_csv(csv_freq_path, index=False)
+        if QView:
+            print(f"Saved affect_frequencies report to {csv_freq_path}")
 
+        # --- Create bar plot of emotion frequencies ---
+        X = df_freq["Emotion"].tolist()
+        Y = df_freq["Frequency"].tolist()
 
-        plt.title("Analysis of text emotions") 
-        plt.xlabel("") 
-        plt.ylabel("Percentage") 
+        plt.figure(figsize=(10, 6))
+        plt.ylim(min(Y) * 0.95, max(Y) * 1.05)
+        bars = plt.bar(X, Y)
+
+        # Color bars according to emotion
+        for bar, emotion in zip(bars, X):
+            bar.set_color(color_map_emotion.get(emotion.lower(), "gray"))
+
+        plt.title("Text Emotion Analysis")
+        plt.ylabel("Frequency")
         plt.xticks(rotation=45)
-        plt.savefig(FileName+"_Report.jpg")
-        
-        #fig2 = plt.figure() 
-        #plt.pie(Y, labels = X, startangle = 90)
-        #plt.savefig(FileName+"_Repport_Pie.jpg")
-        #plt.show() 
-    
-    if (1==1):
-    
-        # Create an instance of a word document 
-        doc = docx.Document() 
-        
-        if QView:
-            print("NbSentences="+str(len(text_object.sentences)))
-          
-        # Add a Title to the document  
-        doc.add_heading('Analysis of text emotions', 0) 
-        para = doc.add_paragraph("") 
-        
-        font_styles = doc.styles
-        font_charstyle = font_styles.add_style('CommentsStyle', WD_STYLE_TYPE.CHARACTER)
-        font_object = font_charstyle.font
-        font_object.size = Pt(10)
-        font_object.name = 'Times New Roman'
-        
-           
-        for i in range(len(text_object.sentences)):
-            Phrase=str(text_object.sentences[i])+" "
-            Phrase_object = NRCLex(Phrase)
-            Content=str(Phrase_object.top_emotions)
-            if (len(Phrase_object.top_emotions)==1):
-                if (Content.find("fear")>0):
-                    para.add_run(Phrase, style='CommentsStyle').font.highlight_color = WD_COLOR_INDEX.RED
-                elif (Content.find("anger")>0):
-                     para.add_run(Phrase, style='CommentsStyle').font.highlight_color = WD_COLOR_INDEX.DARK_RED
-                elif (Content.find("anticip")>0):
-                     para.add_run(Phrase, style='CommentsStyle').font.highlight_color = WD_COLOR_INDEX.GRAY_25
-                elif (Content.find("trust")>0):
-                     para.add_run(Phrase, style='CommentsStyle').font.highlight_color = WD_COLOR_INDEX.TURQUOISE
-                elif (Content.find("surprise")>0):
-                     para.add_run(Phrase, style='CommentsStyle').font.highlight_color = WD_COLOR_INDEX.PINK
-                elif (Content.find("positive")>0):
-                     para.add_run(Phrase, style='CommentsStyle').font.highlight_color = WD_COLOR_INDEX.BRIGHT_GREEN 
-                elif (Content.find("negative")>0):
-                     para.add_run(Phrase, style='CommentsStyle').font.highlight_color = WD_COLOR_INDEX.RED 
-                elif (Content.find("sadness")>0):
-                     para.add_run(Phrase, style='CommentsStyle').font.highlight_color = WD_COLOR_INDEX.VIOLET 
-                elif (Content.find("disgust")>0):
-                      para.add_run(Phrase, style='CommentsStyle').font.highlight_color = WD_COLOR_INDEX.DARK_YELLOW
-                elif (Content.find("joy")>0):
-                      para.add_run(Phrase, style='CommentsStyle').font.highlight_color = WD_COLOR_INDEX.YELLOW 
-                else:
-                    para.add_run(Phrase, style='CommentsStyle').font.highlight_color =WD_COLOR_INDEX.WHITE 
-            else:
-                para.add_run(Phrase, style='CommentsStyle').font.highlight_color =WD_COLOR_INDEX.WHITE
-          
-          
-        # Now save the document to a location  
-        doc.save(FileName+"_Report.docx")
-    
-    
-    if (1==0):
-    
-        # Create an instance of a word document 
-        doc = docx.Document() 
-        
-        if QView:
-            print("NbSentences="+str(len(text_object.sentences)))
-          
-        # Add a Title to the document  
-        doc.add_heading('Analysis of text emotions', 0) 
-        para = doc.add_paragraph("") 
-        
-        font_styles = doc.styles
-        font_charstyle = font_styles.add_style('CommentsStyle', WD_STYLE_TYPE.CHARACTER)
-        font_object = font_charstyle.font
-        font_object.size = Pt(10)
-        font_object.name = 'Times New Roman'
-        
-        
-        for i in range(len(text_object.sentences)):
-            Phrase=str(text_object.sentences[i])+" "
-            Phrase_object = NRCLex(Phrase)
-            
-            for j in range(len(Phrase_object.words)):
-                Phrase=str(Phrase_object.words[j])+" "
-    
-                Content=str(Phrase_object.top_emotions)
-                if (len(Phrase_object.top_emotions)==1):
-                    if (Content.find("fear")>0):
-                        para.add_run(Phrase, style='CommentsStyle').font.highlight_color = WD_COLOR_INDEX.RED
-                    elif (Content.find("anger")>0):
-                         para.add_run(Phrase, style='CommentsStyle').font.highlight_color = WD_COLOR_INDEX.DARK_RED
-                    elif (Content.find("anticip")>0):
-                         para.add_run(Phrase, style='CommentsStyle').font.highlight_color = WD_COLOR_INDEX.GRAY_25
-                    elif (Content.find("trust")>0):
-                         para.add_run(Phrase, style='CommentsStyle').font.highlight_color = WD_COLOR_INDEX.TURQUOISE
-                    elif (Content.find("surprise")>0):
-                         para.add_run(Phrase, style='CommentsStyle').font.highlight_color = WD_COLOR_INDEX.PINK
-                    elif (Content.find("positive")>0):
-                         para.add_run(Phrase, style='CommentsStyle').font.highlight_color = WD_COLOR_INDEX.BRIGHT_GREEN 
-                    elif (Content.find("negative")>0):
-                         para.add_run(Phrase, style='CommentsStyle').font.highlight_color = WD_COLOR_INDEX.RED 
-                    elif (Content.find("sadness")>0):
-                         para.add_run(Phrase, style='CommentsStyle').font.highlight_color = WD_COLOR_INDEX.VIOLET 
-                    elif (Content.find("disgust")>0):
-                          para.add_run(Phrase, style='CommentsStyle').font.highlight_color = WD_COLOR_INDEX.DARK_YELLOW
-                    elif (Content.find("joy")>0):
-                          para.add_run(Phrase, style='CommentsStyle').font.highlight_color = WD_COLOR_INDEX.YELLOW 
-                    else:
-                        para.add_run(Phrase, style='CommentsStyle').font.highlight_color =WD_COLOR_INDEX.WHITE 
-                else:
-                    para.add_run(Phrase, style='CommentsStyle').font.highlight_color =WD_COLOR_INDEX.WHITE
-              
-          
-        # Now save the document to a location  
-        doc.save(FileName+"_Report_zoom.docx")
-    
-    
-    
-    
-    if (1==1):
-    
-        # Create an instance of a word document 
-        doc = docx.Document() 
-        
-        if QView:
-            print("NbSentences="+str(len(text_object.sentences)))
-          
-        # Add a Title to the document  
-        doc.add_heading('Analysis of text emotions', 0) 
-        para = doc.add_paragraph("") 
-        
-        font_styles = doc.styles
-        font_charstyle = font_styles.add_style('CommentsStyle', WD_STYLE_TYPE.CHARACTER)
-        font_object = font_charstyle.font
-        font_object.size = Pt(10)
-        font_object.name = 'Times New Roman'
-        
-           
-        for i in range(len(text_object.sentences)):
-            Phrase=str(text_object.sentences[i])+" "
-            Phrase_object = NRCLex(Phrase)
-            Num=GetCoeffEmotion(Phrase_object.top_emotions)
-            
-            if (len(Phrase_object.top_emotions)>0):
-                if (Num<=-4):
-                    para.add_run(Phrase, style='CommentsStyle').font.highlight_color = WD_COLOR_INDEX.DARK_RED
-                elif (Num<=-3):
-                     para.add_run(Phrase, style='CommentsStyle').font.highlight_color = WD_COLOR_INDEX.RED
-                elif (Num<=-1):
-                     para.add_run(Phrase, style='CommentsStyle').font.highlight_color = WD_COLOR_INDEX.VIOLET
-                elif (Num==0):
-                    para.add_run(Phrase, style='CommentsStyle').font.highlight_color =WD_COLOR_INDEX.WHITE
-                elif (Num>=4):
-                    para.add_run(Phrase, style='CommentsStyle').font.highlight_color =WD_COLOR_INDEX.BRIGHT_GREEN
-                elif (Num>=3):
-                    para.add_run(Phrase, style='CommentsStyle').font.highlight_color =WD_COLOR_INDEX.GREEN
-                elif (Num>=1):
-                    para.add_run(Phrase, style='CommentsStyle').font.highlight_color =WD_COLOR_INDEX.GRAY_25
-               
-            else:
-                para.add_run(Phrase, style='CommentsStyle').font.highlight_color =WD_COLOR_INDEX.WHITE
-                
-          
-        # Now save the document to a location  
-        doc.save(FileName+"_Report_Colors.docx")
-        
-        
+        plt.tight_layout()
 
-if (1==0):
-    
-    # Create an instance of a word document 
-    doc = docx.Document() 
-      
-    # Add a Title to the document  
-    doc.add_heading('GeeksForGeeks', 0) 
-      
-    # Adding Auto Styled Highlighted paragraph 
-    doc.add_heading('AUTO Style:', 3) 
-    doc.add_paragraph().add_run('GeeksforGeeks is a Computer Science portal for geeks.'
-                      ).font.highlight_color = WD_COLOR_INDEX.AUTO 
-      
-    # Adding Black Styled Highlighted paragraph 
-    doc.add_heading('BLACK Style:', 3) 
-    doc.add_paragraph().add_run('GeeksforGeeks is a Computer Science portal for geeks.'
-                      ).font.highlight_color = WD_COLOR_INDEX.BLACK 
-      
-    # Adding Blue Styled Highlighted paragraph 
-    doc.add_heading('BLUE Style:', 3) 
-    doc.add_paragraph().add_run('GeeksforGeeks is a Computer Science portal for geeks.'
-                      ).font.highlight_color = WD_COLOR_INDEX.BLUE 
-      
-    # Adding Bright Green Styled Highlighted paragraph 
-    doc.add_heading('BRIGHT_GREEN Style:', 3) 
-    doc.add_paragraph().add_run('GeeksforGeeks is a Computer Science portal for geeks.'
-                      ).font.highlight_color = WD_COLOR_INDEX.BRIGHT_GREEN 
-      
-    # Adding Dark Blue Styled Highlighted paragraph 
-    doc.add_heading('DARK_BLUE Style:', 3) 
-    doc.add_paragraph().add_run('GeeksforGeeks is a Computer Science portal for geeks.'
-                      ).font.highlight_color = WD_COLOR_INDEX.DARK_BLUE 
-      
-    # Adding Dark Red Styled Highlighted paragraph 
-    doc.add_heading('DARK_RED Style:', 3) 
-    doc.add_paragraph().add_run('GeeksforGeeks is a Computer Science portal for geeks.'
-                      ).font.highlight_color = WD_COLOR_INDEX.DARK_RED 
-      
-    # Adding Dark Yellow Styled Highlighted paragraph 
-    doc.add_heading('DARK_YELLOW Style:', 3) 
-    doc.add_paragraph().add_run('GeeksforGeeks is a Computer Science portal for geeks.'
-                      ).font.highlight_color = WD_COLOR_INDEX.DARK_YELLOW 
-      
-    # Adding GRAY25 Styled Highlighted paragraph 
-    doc.add_heading('GRAY_25 Style:', 3) 
-    doc.add_paragraph().add_run('GeeksforGeeks is a Computer Science portal for geeks.'
-                      ).font.highlight_color = WD_COLOR_INDEX.GRAY_25 
-      
-    # Adding GRAY50 Styled Highlighted paragraph 
-    doc.add_heading('GRAY_50 Style:', 3) 
-    doc.add_paragraph().add_run('GeeksforGeeks is a Computer Science portal for geeks.'
-                      ).font.highlight_color = WD_COLOR_INDEX.GRAY_50 
-      
-    # Adding GREEN Styled Highlighted paragraph 
-    doc.add_heading('GREEN Style:', 3) 
-    doc.add_paragraph().add_run('GeeksforGeeks is a Computer Science portal for geeks.'
-                      ).font.highlight_color = WD_COLOR_INDEX.GREEN 
-      
-    # Adding Pink Styled Highlighted paragraph 
-    doc.add_heading('PINK Style:', 3) 
-    doc.add_paragraph().add_run('GeeksforGeeks is a Computer Science portal for geeks.'
-                      ).font.highlight_color = WD_COLOR_INDEX.PINK 
-      
-    # Adding Red Styled Highlighted paragraph 
-    doc.add_heading('RED Style:', 3) 
-    doc.add_paragraph().add_run('GeeksforGeeks is a Computer Science portal for geeks.'
-                      ).font.highlight_color = WD_COLOR_INDEX.RED 
-      
-    # Adding Teal Styled Highlighted paragraph 
-    doc.add_heading('TEAL Style:', 3) 
-    doc.add_paragraph().add_run('GeeksforGeeks is a Computer Science portal for geeks.'
-                      ).font.highlight_color = WD_COLOR_INDEX.TEAL 
-      
-    # Adding Turquoise Styled Highlighted paragraph 
-    doc.add_heading('TURQUOISE Style:', 3) 
-    doc.add_paragraph().add_run('GeeksforGeeks is a Computer Science portal for geeks.'
-                      ).font.highlight_color = WD_COLOR_INDEX.TURQUOISE 
-      
-    # Adding Violet Styled Highlighted paragraph 
-    doc.add_heading('VIOLET Style:', 3) 
-    doc.add_paragraph().add_run('GeeksforGeeks is a Computer Science portal for geeks.'
-                      ).font.highlight_color = WD_COLOR_INDEX.VIOLET 
-      
-    # Adding White Styled Highlighted paragraph 
-    doc.add_heading('WHITE Style:', 3) 
-    doc.add_paragraph().add_run('GeeksforGeeks is a Computer Science portal for geeks.'
-                      ).font.highlight_color = WD_COLOR_INDEX.WHITE 
-      
-    # Adding Yellow Styled Highlighted paragraph 
-    doc.add_heading('YELLOW Style:', 3) 
-    doc.add_paragraph().add_run('GeeksforGeeks is a Computer Science portal for geeks.'
-                      ).font.highlight_color = WD_COLOR_INDEX.YELLOW 
-      
-    # Now save the document to a location  
-    doc.save('Color.docx')
-    
+        img_path = f"{file_base_name}_Report.jpg"
+        plt.savefig(img_path)
+        plt.close()
+        if QView:
+            print(f"Saved plot image to {img_path}")
 
+        # --- Create Word document with sentence-level emotion highlighting ---
+        doc = docx.Document()
+        doc.add_heading("Text Emotion Analysis", level=0)
+
+        # Create a custom character style for the document
+        styles = doc.styles
+        char_style = styles.add_style('CommentsStyle', WD_STYLE_TYPE.CHARACTER)
+        font = char_style.font
+        font.size = Pt(10)
+        font.name = 'Times New Roman'
+
+        # Analyze each sentence and highlight based on emotion score
+        for sentence in text_object.sentences:
+            phrase = str(sentence) + " "
+            phrase_obj = NRCLex(phrase)
+            top_emotions = phrase_obj.top_emotions
+
+            score = get_coeff_emotion(top_emotions)
+
+            highlight_color = WD_COLOR_INDEX.WHITE  # Default highlight color
+            for cond, color in color_map_score:
+                if cond(score):
+                    highlight_color = color
+                    break
+
+            para = doc.add_paragraph()
+            run = para.add_run(phrase, style='CommentsStyle')
+            run.font.highlight_color = highlight_color
+
+        doc_path = f"{file_base_name}_Report_Colors.docx"
+        doc.save(doc_path)
+        if QView:
+            print(f"Saved Word document to {doc_path}")
+
+if __name__ == "__main__":
+    main()
