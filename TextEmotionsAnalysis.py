@@ -1,3 +1,5 @@
+# Author(s): Dr. Patrick Lemoine
+
 import os
 import glob
 import argparse
